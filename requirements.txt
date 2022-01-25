@@ -1,0 +1,4 @@
+colorzero==2.0
+gpiozero==1.6.2
+picamera==1.13
+PyBluez==0.23

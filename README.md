@@ -1,2 +1,2 @@
 # mdp-raspberrypi
- CZ3004 MDP - RPi Python Scripts
+This repository contains the Python scripts for the Raspberry Pi component of the CZ3004 Multi-Disciplinary Project (MDP).
