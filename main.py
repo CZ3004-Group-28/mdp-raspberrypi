@@ -3,8 +3,8 @@
 
 from multiprocessing import Process, Queue
 
-from communication.stm32 import STMLink
 from misc.buzzer import beep_buzzer
+from communication.stm32 import STMLink
 from communication.android import AndroidLink
 from communication.communicator import Message
 
@@ -44,18 +44,30 @@ class RaspberryPi:
         print("[✔] recv_android() started")
         while True:
             message = self.android_link.recv()
+
             if message is None:
                 continue
+            else:
+                message.strip()
 
             print(f"Received from android: {message}")
 
+            # actions
             if message == "beep":
                 self.rpi_queue.put(message)
 
     # todo: recv_stm() after implementing STMLink class
     def recv_stm(self):
         print("[✔] recv_stm() started")
-        pass
+        while True:
+            message = self.stm_link.recv()
+
+            if message is None:
+                continue
+            else:
+                message.strip()
+
+            print(f"Received from STM: {message}")
 
     def rpi_action(self):
         while True:
@@ -72,11 +84,13 @@ class RaspberryPi:
 
         while True:
             # retrieve message from queue
-            message = self.message_queue.get()
+            message: Message = self.message_queue.get()
 
             # check destination and send it over the correct link
             if message.destination == "android":
                 self.android_link.send(message.json)
+            elif message.destination == "stm":
+                self.stm_link.send(message.json)
 
 
 if __name__ == "__main__":
