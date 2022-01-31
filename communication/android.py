@@ -1,4 +1,5 @@
 import os
+import socket
 from typing import Optional
 
 import bluetooth
@@ -33,9 +34,6 @@ class AndroidLink(Link):
             self.client_sock, client_info = self.server_sock.accept()
             print("[✔] Accepted connection from", client_info)
 
-            # send greeting after accepting connection
-            self.client_sock.send(b"You are now connected to me!")
-
         except Exception as e:
             print(e)
             self.server_sock.close()
@@ -44,30 +42,33 @@ class AndroidLink(Link):
     def disconnect(self):
         try:
             print("[-] Disconnecting...")
+            self.server_sock.shutdown(socket.SHUT_RDWR)
+            self.client_sock.shutdown(socket.SHUT_RDWR)
             self.client_sock.close()
             self.server_sock.close()
             self.client_sock = None
             self.server_sock = None
             print("[✔] Disconnected")
         except Exception as e:
-            print(e)
+            print("Disconnecting failed", e)
             exit()
 
+    # todo: broken pipe error when trying to send messages after re-connection
     def send(self, message: str):
         try:
-            self.client_sock.send(message.encode("utf-8"))
+            self.client_sock.send(f"{message}\n".encode("utf-8"))
         except OSError as e:
-            print(e)
-            exit()
+            print("[!] Error sending message to android:", e)
+            self.disconnect()
+            self.connect()  # try to reconnect
+            self.send(message)  # retry sending
 
     def recv(self) -> Optional[str]:
         try:
             message = self.client_sock.recv(1024).strip().decode("utf-8")
-            # todo: check possible values for message
-            if message:
-                return message
-        except OSError as e:
-            print(e)
-            exit()
-
+            return message
+        except OSError as e:  # connection broken, try to reconnect
+            print("[!] Error receiving message from android:", e)
+            self.disconnect()
+            self.connect()
         return None

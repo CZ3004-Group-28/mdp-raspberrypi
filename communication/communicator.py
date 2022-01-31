@@ -33,13 +33,3 @@ class Message:
     @payload.setter
     def payload(self, value):
         self._payload = value
-
-    @property
-    def json(self):
-        return json.dumps({'destination': self._destination, 'payload': self._payload}) + "\r\n"
-
-    def load_json(self, json_str: str):
-        # set instance attributes using json representation of a Message
-        message = json.loads(json_str)
-        self._destination = message['destination']
-        self._payload = message['payload']
