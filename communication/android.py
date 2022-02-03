@@ -3,7 +3,7 @@ import socket
 from typing import Optional
 
 import bluetooth
-from communication.communicator import Link
+from communication.communicator import Link, AndroidMessage
 
 
 class AndroidLink(Link):
@@ -54,9 +54,9 @@ class AndroidLink(Link):
             exit()
 
     # todo: broken pipe error when trying to send messages after re-connection
-    def send(self, message: str):
+    def send(self, message: AndroidMessage):
         try:
-            self.client_sock.send(f"{message}\n".encode("utf-8"))
+            self.client_sock.send(f"{message.json_str}\n".encode("utf-8"))
         except OSError as e:
             print("[!] Error sending message to android:", e)
             self.disconnect()

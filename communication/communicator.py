@@ -33,3 +33,13 @@ class Message:
     @payload.setter
     def payload(self, value):
         self._payload = value
+
+
+class AndroidMessage(Message):
+    def __init__(self, **kwargs):
+        super(AndroidMessage, self).__init__(**kwargs)
+        self.type = kwargs.get('type')
+
+    @property
+    def json_str(self):
+        return json.dumps({'type': self.type, 'msg': self.payload})

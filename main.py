@@ -6,7 +6,7 @@ from multiprocessing import Process, Queue
 from misc.buzzer import beep_buzzer
 from communication.stm32 import STMLink
 from communication.android import AndroidLink
-from communication.communicator import Message
+from communication.communicator import Message, AndroidMessage
 
 
 class RaspberryPi:
@@ -23,7 +23,7 @@ class RaspberryPi:
         try:
             # establish bluetooth connection with android
             self.android_link.connect()
-            self.outgoing_message_queue.put(Message(destination='android', payload='You are connected to the RPi!'))
+            self.outgoing_message_queue.put(AndroidMessage(type='status', destination='android', payload='You are connected to the RPi!'))
 
             # establish connection with STM32
             self.stm_link.connect()
@@ -53,7 +53,8 @@ class RaspberryPi:
         while True:
             message = self.android_link.recv()
 
-            if message is None: continue
+            if message is None:
+                continue
 
             print(f"Received from android: {message}")
 
@@ -72,7 +73,7 @@ class RaspberryPi:
             print(f"Received from STM: {message}")
 
             # forward messages from STM to Android
-            self.outgoing_message_queue.put(Message(destination='android', payload=message))
+            self.outgoing_message_queue.put(AndroidMessage(type='ack', destination='android', payload=message))
 
     def sender(self):
         """
@@ -82,15 +83,19 @@ class RaspberryPi:
 
         while True:
             # retrieve outgoing messages from queue
-            message: Message = self.outgoing_message_queue.get()
+            message = self.outgoing_message_queue.get()
 
             # check destination and send it over the correct link
             if message.destination == "android":
-                self.android_link.send(message.payload)
+                self.android_link.send(message)
             elif message.destination == "stm":
                 self.stm_link.send(message.payload)
 
     def rpi_action(self):
+        """
+        Responsible for performing actions on the RPi!
+        Currently only has one action: taking pictures and transmitting it back to bluetooth.
+        """
         print("[✔] rpi_action() started")
 
         while True:
@@ -99,7 +104,7 @@ class RaspberryPi:
 
             if action == "RPI_SNAP":
                 print("Snapping picture..")
-                self.outgoing_message_queue.put(Message(destination='android', payload='OK'))
+                self.outgoing_message_queue.put(AndroidMessage(type='ack', destination='android', payload='OK'))
             elif action == "RPI_BEEP":
                 print("BEEPING")
                 beep_buzzer(3)
