@@ -189,7 +189,7 @@ class RaspberryPi:
                 self.rpi_action_queue.put(PiAction(cat="snap", value=obstacle_id))
 
             # end of path
-            elif command == "END":
+            elif command == "FIN":
                 # clear the unpause event (no new command will be retrieved from queue)
                 self.unpause.clear()
 
