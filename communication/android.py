@@ -56,7 +56,7 @@ class AndroidLink(Link):
     # todo: broken pipe error when trying to send messages after re-connection
     def send(self, message: AndroidMessage):
         try:
-            self.client_sock.send(f"{message.json_str}\n".encode("utf-8"))
+            self.client_sock.send(f"{message.jsonify}\n".encode("utf-8"))
         except OSError as e:
             print("[!] Error sending message to android:", e)
             self.disconnect()
