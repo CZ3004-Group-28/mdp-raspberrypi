@@ -1,6 +1,9 @@
 # mdp-raspberrypi
 This repository contains the Python scripts for the Raspberry Pi component of the CZ3004 Multi-Disciplinary Project (MDP).
 
+## Topology Diagram
+![Topology Diagram](topology.jpg)
+
 ## Raspberry Pi Message formats
 
 ### Android to RPi
@@ -102,8 +105,8 @@ After every command received on the STM32, an acknowledgement (string: `OK`) mus
 The RPi will only send the following commands to the STM32.
 
 #### Path mode commands:
-- `FW00`: Move forward x units
-- `BW00`: Move backward x units
+- `FW0x`: Move forward `x` units
+- `BW0x`: Move backward `x` units
 - `FL00`: Move to the forward-left location
 - `FR00`: Move to the forward-right location
 - `BL00`: Move to the backward-left location
