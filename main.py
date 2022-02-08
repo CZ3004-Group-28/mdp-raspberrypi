@@ -180,7 +180,7 @@ class RaspberryPi:
             time.sleep(0.5)
 
             # path movement commands
-            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "KILL")):
+            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "STOP")):
                 self.stm_link.send(command)
 
             # snap command, add this task to queue
@@ -189,7 +189,7 @@ class RaspberryPi:
                 self.rpi_action_queue.put(PiAction(cat="snap", value=obstacle_id))
 
             # end of path
-            elif command == "STOP":
+            elif command == "END":
                 # clear the unpause event (no new command will be retrieved from queue)
                 self.unpause.clear()
 
