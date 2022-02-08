@@ -13,10 +13,17 @@ This repository contains the Python scripts for the Raspberry Pi component of th
 {"cat": "mode", "value": "path"}
 ```
 
+Possible responses:
+```json
+{"cat": "info", "value": "Robot is now in Path mode."}
+{"cat": "info", "value": "Robot is now in Manual mode."}
+{"cat": "error", "value": "Robot already in Path mode."}
+{"cat": "error", "value": "Robot already in Manual mode."}
+```
+
 #### Path Mode Commands
 The following commands are only valid if the robot is currently operating in the Path mode. If the robot is in the manual mode, the robot will respond with an error.
 
-Examples:
 ```json
 {"cat": "error", "value": "Robot must be in Path mode to set obstacles."}
 {"cat": "error", "value": "Robot must be in Path mode to start robot on path."}
@@ -44,6 +51,12 @@ If there are no commands in the queue, the RPi will respond with an error:
 ```
 
 #### Manual Mode Commands
+The following commands are only valid if the robot is currently operating in the Manual mode. If the robot is in the Path mode, the robot will respond with an error.
+
+```json
+{"cat": "error", "value": "Manual movement not allowed in Path mode."}
+```
+
 ##### Movement commands
 Movement commands for the manual mode will set the robot moving indefinitely until a `STOP` command is received.
 
@@ -74,14 +87,16 @@ The RPi will send messages to the Android app in the following format:
 In Path mode, the robot will periodically notify android with the updated location of the robot.
 
 ```json
-{"cat": "location", "value": "[x, y, d]"}
+{"cat": "location", "value": [x, y, d]}
 ```
-where `x` and `y` is the location of the robot, and `d` is its direction.
+where `x`, `y` is the location of the robot, and `d` is its direction.
 
 ---
 
 ### STM32 to RPi
 After every command received on the STM32, an acknowledgement (string: `OK`) must be sent back to the RPi to signal that the STM32 has completed the command, and is ready for the next command.
+
+---
 
 ### RPi to STM32
 The RPi will only send the following commands to the STM32.
