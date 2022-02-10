@@ -85,6 +85,12 @@ The RPi will send messages to the Android app in the following format:
 - `info`: general messages
 - `error`: error messages, usually in response of an invalid action
 - `location`: the current location of the robot (in Path mode)
+- `image-rec`: image recognition results
+
+#### Image recognition results
+```json
+{"cat": "image-rec", "value": {"image_id": "A", "obstacle_id":  "1"}}
+```
 
 #### Location Updates
 In Path mode, the robot will periodically notify android with the updated location of the robot.
