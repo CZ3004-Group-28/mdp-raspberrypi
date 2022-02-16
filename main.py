@@ -164,7 +164,7 @@ class RaspberryPi:
         while True:
             message = self.stm_link.recv()
 
-            if message.startswith("ACK"):
+            if message.startswith(("ACK", "OK")):
                 # release movement lock
                 self.movement_lock.release()
                 self.logger.debug("ACK from STM32 received, movement lock released.")
@@ -214,6 +214,7 @@ class RaspberryPi:
                 self.unpause.clear()
                 self.movement_lock.release()
                 self.logger.info("Commands queue finished.")
+                self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Commands queue finished."))
             else:
                 raise Exception(f"Unknown command: {command}")
 
@@ -237,21 +238,23 @@ class RaspberryPi:
         The response is then forwarded back to the android
         :param obstacle_id: the current obstacle ID
         """
+
+        # notify android
+        self.logger.info(f"Capturing image for obstacle id: {obstacle_id}")
+        self.android_outgoing_queue.put(
+            AndroidMessage(cat="info", value=f"Capturing image for obstacle id: {obstacle_id}"))
+
         # capture an image
-        self.logger.info("Capturing image")
         stream = io.BytesIO()
         with picamera.PiCamera() as camera:
             camera.start_preview()
             time.sleep(1)
             camera.capture(stream, format='jpeg')
 
-        # release lock so that bot can continue moving
-        self.movement_lock.release()
-
         # notify android
         self.android_outgoing_queue.put(
-            AndroidMessage(cat="info", value="Image captured, movement lock released. Calling image-rec api..."))
-        self.logger.info("Image captured, movement lock released. Calling image-rec api...")
+            AndroidMessage(cat="info", value="Image captured. Calling image-rec api..."))
+        self.logger.info("Image captured. Calling image-rec api...")
 
         # call image-rec API endpoint
         self.logger.debug("Requesting from image API")
@@ -266,13 +269,20 @@ class RaspberryPi:
         results = json.loads(response.content)
 
         if results.get("stop"):
-            self.clear_queues()
-            self.logger.info("Found obstacle, remaining commands and path cleared.")
+            self.unpause.clear()
+            while not self.command_queue.empty():
+                self.command_queue.get()
+            self.logger.info("Found non-bullseye face, remaining commands and path cleared.")
+            self.android_outgoing_queue.put(
+                AndroidMessage(cat="info", value="Found non-bullseye face, remaining commands and path cleared."))
 
         self.logger.info(f"Image recognition results: {results}")
 
         # notify android
         self.android_outgoing_queue.put(AndroidMessage(cat="image-rec", value=results))
+
+        # release lock so that bot can continue moving
+        self.movement_lock.release()
 
     def request_algo(self, data: str, around: bool = False):
         """
