@@ -103,7 +103,8 @@ where `x`, `y` is the location of the robot, and `d` is its direction.
 ---
 
 ### STM32 to RPi
-After every command received on the STM32, an acknowledgement (string: `OK`) must be sent back to the RPi to signal that the STM32 has completed the command, and is ready for the next command.
+After every command received on the STM32, an acknowledgement (string: `ACK|xxx`) must be sent back to the RPi.
+This signals to the RPi that the STM32 has completed the command, and is ready for the next command.
 
 ---
 

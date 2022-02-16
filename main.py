@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
+
 import io
 import json
 import time
 from multiprocessing import Process, Queue, Lock, Value, Event
 
-import requests
 import picamera
+import requests
 
-from communication.stm32 import STMLink
 from communication.android import AndroidLink, AndroidMessage
+from communication.stm32 import STMLink
 from logger import prepare_logger
 from settings import API_IP, API_PORT
 
@@ -20,6 +21,7 @@ class PiAction:
     - Requesting a path from the API
     - Snapping an image and requesting the image-rec result from the API
     """
+
     def __init__(self, cat, value):
         self._cat = cat
         self._value = value
@@ -94,11 +96,11 @@ class RaspberryPi:
         self.stm_link.disconnect()
         self.logger.info("Program exited!")
 
-    def recv_android(self):
+    def recv_android(self) -> None:
         while True:
             msg_str = self.android_link.recv()
 
-            # todo: check if this is needed
+            # if an error occurred in recv()
             if msg_str is None:
                 continue
 
@@ -145,14 +147,24 @@ class RaspberryPi:
                         AndroidMessage(cat="error", value="Robot must be in Path mode to start robot on path."))
                     self.logger.warning("Robot must be in Path mode to start robot on path.")
 
-    def recv_stm(self):
+            # around obstacle
+            elif message['cat'] == "single-obstacle":
+                if self.robot_mode.value == 1:  # robot must be in path mode
+                    self.rpi_action_queue.put(PiAction(**message))
+                    self.logger.debug(f"Single-obstacle PiAction added to queue: {message}")
+                else:
+                    self.android_outgoing_queue.put(
+                        AndroidMessage(cat="error", value="Robot must be in Path mode to set single obstacle."))
+                    self.logger.warning("Robot must be in Path mode to set single obstacle.")
+
+    def recv_stm(self) -> None:
         """
         Receive acknowledgement messages from STM32, and release the movement lock
         """
         while True:
             message = self.stm_link.recv()
 
-            if message == "OK":
+            if message.startswith("ACK"):
                 # release movement lock
                 self.movement_lock.release()
                 self.logger.debug("ACK from STM32 received, movement lock released.")
@@ -162,19 +174,21 @@ class RaspberryPi:
                     temp = self.path_queue.get()
                     location = [temp['x'], temp['y'], temp['d']]
                     self.android_outgoing_queue.put(AndroidMessage(cat='location', value=location))
+            else:
+                raise Exception(f"Unknown message from STM32: {message}")
 
-    def android_sender(self):
+    def android_sender(self) -> None:
         """
-        Responsible for retrieving messages from the message queue and sending them over the correct link
+        Responsible for retrieving messages from the outgoing message queue and sending them over the Android Link
         """
         while True:
-            # retrieve outgoing messages from queue
-            message = self.android_outgoing_queue.get()
+            # retrieve from queue
+            message: AndroidMessage = self.android_outgoing_queue.get()
 
             # send it over the android link
             self.android_link.send(message)
 
-    def command_follower(self):
+    def command_follower(self) -> None:
         while True:
             # retrieve next movement command
             command = self.command_queue.get()
@@ -186,7 +200,7 @@ class RaspberryPi:
             self.movement_lock.acquire()
 
             # path movement commands
-            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "STOP")):
+            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "STOP")):
                 self.stm_link.send(command)
 
             # snap command, add this task to queue
@@ -214,9 +228,16 @@ class RaspberryPi:
                 self.request_algo(action.value)
             elif action.cat == "snap":
                 self.snap_and_rec(obstacle_id=action.value)
+            elif action.cat == "single-obstacle":
+                self.request_algo(action.value, around=True)
 
-    def snap_and_rec(self, obstacle_id):
-        # snap image
+    def snap_and_rec(self, obstacle_id: str) -> None:
+        """
+        RPi snaps an image and calls the API for image-rec.
+        The response is then forwarded back to the android
+        :param obstacle_id: the current obstacle ID
+        """
+        # capture an image
         self.logger.info("Capturing image")
         stream = io.BytesIO()
         with picamera.PiCamera() as camera:
@@ -243,13 +264,27 @@ class RaspberryPi:
             raise Exception("Something went wrong when requesting path from image-rec API.")
 
         results = json.loads(response.content)
+
+        if results.get("stop"):
+            self.clear_queues()
+            self.logger.info("Found obstacle, remaining commands and path cleared.")
+
         self.logger.info(f"Image recognition results: {results}")
 
         # notify android
         self.android_outgoing_queue.put(AndroidMessage(cat="image-rec", value=results))
 
-    def request_algo(self, data: str):
-        url = f"http://{API_IP}:{API_PORT}/path"
+    def request_algo(self, data: str, around: bool = False):
+        """
+        Requests for a series of commands and the path from the algo API
+        The received commands and path are then queued in the respective queues
+        If around=true, will call the /navigate endpoint instead, else /path is used
+        """
+        if not around:
+            url = f"http://{API_IP}:{API_PORT}/path"
+        else:
+            url = f"http://{API_IP}:{API_PORT}/navigate"
+
         response = requests.post(url, json=data)
 
         if response.status_code != 200:
