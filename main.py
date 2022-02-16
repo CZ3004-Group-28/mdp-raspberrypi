@@ -172,7 +172,11 @@ class RaspberryPi:
                 # if in path mode, get new location and notify android
                 if self.robot_mode.value == 1:
                     temp = self.path_queue.get()
-                    location = [temp['x'], temp['y'], temp['d']]
+                    location = {
+                        "x": temp['x'],
+                        "y": temp['y'],
+                        "d": temp['d'],
+                    }
                     self.android_outgoing_queue.put(AndroidMessage(cat='location', value=location))
             else:
                 raise Exception(f"Unknown message from STM32: {message}")

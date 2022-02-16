@@ -96,7 +96,7 @@ The RPi will send messages to the Android app in the following format:
 In Path mode, the robot will periodically notify android with the updated location of the robot.
 
 ```json
-{"cat": "location", "value": [x, y, d]}
+{"cat": "location", "value": {"x": 1, "y": 1, "d": 0}}
 ```
 where `x`, `y` is the location of the robot, and `d` is its direction.
 
