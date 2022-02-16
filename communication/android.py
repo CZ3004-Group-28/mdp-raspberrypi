@@ -67,17 +67,16 @@ class AndroidLink(Link):
 
     def disconnect(self):
         try:
-            self.logger.info("Disconnecting bluetooth link")
+            self.logger.debug("Disconnecting bluetooth link")
             self.server_sock.shutdown(socket.SHUT_RDWR)
             self.client_sock.shutdown(socket.SHUT_RDWR)
             self.client_sock.close()
             self.server_sock.close()
             self.client_sock = None
             self.server_sock = None
-            self.logger.info("Disconnected bluetooth link")
+            self.logger.debug("Disconnected bluetooth link")
         except Exception as e:
             self.logger.error(f"Failed to disconnect bluetooth link: {e}")
-            exit()
 
     # todo: broken pipe error when trying to send messages after re-connection
     def send(self, message: AndroidMessage):
@@ -86,9 +85,7 @@ class AndroidLink(Link):
             self.logger.debug(f"Sent to Android: {message.jsonify}")
         except OSError as e:
             self.logger.error(f"Error sending message to android: {e}")
-            self.disconnect()
-            self.connect()  # try to reconnect
-            self.send(message)  # retry sending
+            raise e
 
     def recv(self) -> Optional[str]:
         try:
@@ -97,6 +94,4 @@ class AndroidLink(Link):
             return message
         except OSError as e:  # connection broken, try to reconnect
             self.logger.error(f"Error receiving message from android: {e}")
-            self.disconnect()
-            self.connect()
-        return None
+            raise e

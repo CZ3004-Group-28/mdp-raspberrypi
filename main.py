@@ -2,8 +2,9 @@
 
 import io
 import json
+import queue
 import time
-from multiprocessing import Process, Queue, Lock, Value, Event
+from multiprocessing import Process, Lock, Value, Event, Manager
 
 import picamera
 import requests
@@ -40,26 +41,35 @@ class RaspberryPi:
         # prepare logger
         self.logger = prepare_logger()
 
-        # 0: manual, 1: path (default: 1)
-        self.robot_mode = Value('i', 1)
-
         # communication links
         self.android_link = AndroidLink()
         self.stm_link = STMLink()
 
-        # movement lock
-        # commands can only be sent to stm32 if this lock is released
-        self.movement_lock = Lock()
+        # for sharing information between child processes
+        manager = Manager()
 
-        # pause execution of commands queue
-        # used to wait for the 'start' command in path mode before moving robot
-        self.unpause = Event()
+        # 0: manual, 1: path (default: 1)
+        self.robot_mode = manager.Value('i', 1)
+
+        # events
+        self.android_dropped = manager.Event()  # set when the android link drops
+        self.unpause = manager.Event()  # commands will be retrieved from commands queue when this event is set
+
+        # movement lock, commands will only be sent to STM32 if this is released
+        self.movement_lock = manager.Lock()
 
         # queues
-        self.android_outgoing_queue = Queue()
-        self.rpi_action_queue = Queue()
-        self.command_queue = Queue()
-        self.path_queue = Queue()
+        self.android_outgoing_queue = manager.Queue()
+        self.rpi_action_queue = manager.Queue()
+        self.command_queue = manager.Queue()
+        self.path_queue = manager.Queue()
+
+        # define processes
+        self.proc_recv_android = None
+        self.proc_recv_stm32 = None
+        self.proc_android_sender = None
+        self.proc_command_follower = None
+        self.proc_rpi_action = None
 
     def start(self):
         try:
@@ -73,20 +83,23 @@ class RaspberryPi:
             # todo: ping test to API
 
             # define processes
-            proc_recv_android = Process(target=self.recv_android)
-            proc_recv_stm32 = Process(target=self.recv_stm)
-            proc_android_sender = Process(target=self.android_sender)
-            proc_command_follower = Process(target=self.command_follower)
-            proc_rpi_action = Process(target=self.rpi_action)
+            self.proc_recv_android = Process(target=self.recv_android)
+            self.proc_recv_stm32 = Process(target=self.recv_stm)
+            self.proc_android_sender = Process(target=self.android_sender)
+            self.proc_command_follower = Process(target=self.command_follower)
+            self.proc_rpi_action = Process(target=self.rpi_action)
 
             # start processes
-            proc_recv_android.start()
-            proc_recv_stm32.start()
-            proc_android_sender.start()
-            proc_command_follower.start()
-            proc_rpi_action.start()
+            self.proc_recv_android.start()
+            self.proc_recv_stm32.start()
+            self.proc_android_sender.start()
+            self.proc_command_follower.start()
+            self.proc_rpi_action.start()
 
             self.logger.info("Child Processes started")
+
+            # reconnect handler to watch over android connection
+            self.reconnect_android()
 
         except KeyboardInterrupt:
             self.stop()
@@ -96,9 +109,53 @@ class RaspberryPi:
         self.stm_link.disconnect()
         self.logger.info("Program exited!")
 
+    def reconnect_android(self):
+        self.logger.info("Reconnection handler is watching...")
+
+        while True:
+            # wait for android connection to drop
+            self.android_dropped.wait()
+
+            self.logger.error("Android link is down!")
+
+            # kill child processes
+            self.logger.debug("Killing android child processes")
+            self.proc_android_sender.kill()
+            self.proc_recv_android.kill()
+
+            # wait for the child processes to finish
+            self.proc_android_sender.join()
+            self.proc_recv_android.join()
+            assert self.proc_android_sender.is_alive() is False
+            assert self.proc_recv_android.is_alive() is False
+            self.logger.debug("Android child processes killed")
+
+            # clean up old sockets
+            self.android_link.disconnect()
+
+            # reconnect
+            self.android_link.connect()
+
+            # recreate android processes
+            self.proc_recv_android = Process(target=self.recv_android)
+            self.proc_android_sender = Process(target=self.android_sender)
+
+            # start processes
+            self.proc_recv_android.start()
+            self.proc_android_sender.start()
+
+            self.logger.info("Android child processes restarted")
+            self.android_outgoing_queue.put(AndroidMessage(cat="info", value="You are reconnected!"))
+
+            self.android_dropped.clear()
+
     def recv_android(self) -> None:
         while True:
-            msg_str = self.android_link.recv()
+            try:
+                msg_str = self.android_link.recv()
+            except OSError:
+                self.android_dropped.set()
+                self.logger.debug("Event set: Android dropped")
 
             # if an error occurred in recv()
             if msg_str is None:
@@ -164,7 +221,7 @@ class RaspberryPi:
         while True:
             message = self.stm_link.recv()
 
-            if message.startswith(("ACK", "OK")):
+            if message.startswith("ACK"):
                 # release movement lock
                 self.movement_lock.release()
                 self.logger.debug("ACK from STM32 received, movement lock released.")
@@ -187,10 +244,17 @@ class RaspberryPi:
         """
         while True:
             # retrieve from queue
-            message: AndroidMessage = self.android_outgoing_queue.get()
+            try:
+                message: AndroidMessage = self.android_outgoing_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
 
             # send it over the android link
-            self.android_link.send(message)
+            try:
+                self.android_link.send(message)
+            except OSError:
+                self.android_dropped.set()
+                self.logger.debug("Event set: Android dropped")
 
     def command_follower(self) -> None:
         while True:
