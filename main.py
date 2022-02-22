@@ -267,14 +267,24 @@ class RaspberryPi:
             # acquire lock first (needed for both moving, and snapping pictures)
             self.movement_lock.acquire()
 
-            # path movement commands
+            # STM32 commands
             if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "STOP")):
                 self.stm_link.send(command)
 
-            # snap command, add this task to queue
+            # snap command (path mode)
             elif command.startswith("SNAP"):
                 obstacle_id = command.replace("SNAP", "")
                 self.rpi_action_queue.put(PiAction(cat="snap", value=obstacle_id))
+
+            # snap command (manual mode)
+            elif command.startswith("MANSNAP"):
+                obstacle_id = "99"
+                self.rpi_action_queue.put(PiAction(cat="snap", value=obstacle_id))
+
+            # no-op (a workaround to let the robot stop after a non-bullseye face has been found)
+            elif command.startswith("NOOP"):
+                # self.stm_link.send("FW00")
+                self.movement_lock.release()
 
             # end of path
             elif command == "FIN":
