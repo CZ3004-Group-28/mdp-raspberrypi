@@ -270,7 +270,7 @@ class RaspberryPi:
             self.movement_lock.acquire()
 
             # STM32 commands
-            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "STOP")):
+            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "DT", "STOP")):
                 self.stm_link.send(command)
 
             # snap command (path mode)
