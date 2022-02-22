@@ -42,6 +42,13 @@ Reference: https://github.com/CZ3004-Group-28/Algo
 {"cat": "obstacles", "value": {"obstacles": [{"x": 5, "y": 10, "id": 1, "d": 2}]}}
 ```
 
+##### Navigate around obstacle
+RPi will make a call to the Algorithms API and store the received commands and path.
+This path only consists of the steps for navigating around the obstacle.
+```json
+{"cat": "single-obstacle", "value": {"robot" : {"x" : 10, "y" : 7, "d" : 0},"obstacle" : {"x" : 10, "y" : 10}}}
+```
+
 ##### Start
 Signals to the robot to start dispatching the commands (when obstacles were set).
 ```json
@@ -71,6 +78,12 @@ For example, when the "forward" button is pressed (and held) in the android app,
 {"cat": "manual", "value": "TL--"}
 {"cat": "manual", "value": "TR--"}
 {"cat": "manual", "value": "STOP"}
+```
+
+##### Capture image and call Image Recognition API
+Pi will immediately capture an image using the camera and make a call to the Image Recognition API.
+```json
+{"cat": "manual", "value": "MANSNAP"}
 ```
 
 ---
