@@ -75,7 +75,7 @@ class RaspberryPi:
         try:
             # establish bluetooth connection with Android
             self.android_link.connect()
-            self.android_outgoing_queue.put(AndroidMessage(cat='status', value='You are connected to the RPi!'))
+            self.android_outgoing_queue.put(AndroidMessage(cat='info', value='You are connected to the RPi!'))
 
             # establish connection with STM32
             self.stm_link.connect()
@@ -97,6 +97,7 @@ class RaspberryPi:
             self.proc_rpi_action.start()
 
             self.logger.info("Child Processes started")
+            self.android_outgoing_queue.put(AndroidMessage(cat='info', value='Robot is ready!'))
 
             # reconnect handler to watch over android connection
             self.reconnect_android()
@@ -195,6 +196,7 @@ class RaspberryPi:
                         if not self.command_queue.empty():
                             self.unpause.set()
                             self.logger.info("Start command received, starting robot on path!")
+                            self.android_outgoing_queue.put(AndroidMessage(cat='info', value='Starting robot on path!'))
                         else:
                             self.logger.warning("The command queue is empty, please set obstacles.")
                             self.android_outgoing_queue.put(
@@ -401,7 +403,7 @@ class RaspberryPi:
             self.logger.warning("Robot already in Manual mode.")
         elif new_mode == "path" and self.robot_mode.value == 1:
             self.android_outgoing_queue.put(AndroidMessage(cat='error', value='Robot already in Path mode.'))
-            self.logger.warninig("Robot already in Path mode.")
+            self.logger.warning("Robot already in Path mode.")
         else:
             # change robot mode
             self.robot_mode.value = 0 if new_mode == 'manual' else 1
