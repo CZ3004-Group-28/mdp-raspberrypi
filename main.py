@@ -295,6 +295,7 @@ class RaspberryPi:
                 self.movement_lock.release()
                 self.logger.info("Commands queue finished.")
                 self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Commands queue finished."))
+                self.rpi_action_queue.put(PiAction(cat="stitch", value=""))
             else:
                 raise Exception(f"Unknown command: {command}")
 
@@ -311,6 +312,9 @@ class RaspberryPi:
                 self.snap_and_rec(obstacle_id=action.value)
             elif action.cat == "single-obstacle":
                 self.add_navigate_path()
+            elif action.cat == "stitch":
+                self.request_stitch()
+
 
     def snap_and_rec(self, obstacle_id: str) -> None:
         """
@@ -420,6 +424,16 @@ class RaspberryPi:
         self.logger.info("Navigate-around-obstacle path loaded. Robot is ready to move.")
         self.android_outgoing_queue.put(
             AndroidMessage(cat="info", value="Navigate-around-obstacle path loaded. Robot is ready to move."))
+
+    def request_stitch(self):
+        url = f"http://{API_IP}:{API_PORT}/stitch"
+        response = requests.get(url)
+
+        if response.status_code != 200:
+            raise Exception("Something went wrong when requesting path from Algo API.")
+
+        self.logger.info("Images stitched!")
+        self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Images stitched!"))
 
     def change_mode(self, new_mode):
         # if robot already in correct mode
