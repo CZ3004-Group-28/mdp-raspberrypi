@@ -4,7 +4,7 @@ import io
 import json
 import queue
 import time
-from multiprocessing import Process, Lock, Value, Event, Manager
+from multiprocessing import Process, Manager
 
 import picamera
 import requests
@@ -310,7 +310,7 @@ class RaspberryPi:
             elif action.cat == "snap":
                 self.snap_and_rec(obstacle_id=action.value)
             elif action.cat == "single-obstacle":
-                self.request_algo(action.value, around=True)
+                self.add_navigate_path()
 
     def snap_and_rec(self, obstacle_id: str) -> None:
         """
@@ -395,6 +395,31 @@ class RaspberryPi:
         # notify android
         self.android_outgoing_queue.put(
             AndroidMessage(cat="info", value="Commands and path received Algo API. Robot is ready to move."))
+
+    def add_navigate_path(self):
+        # our hardcoded path
+        hardcoded_path = [
+            "DT20", "SNAPS", "NOOP",
+            "FR00", "FL00", "FW30", "BR00", "FW10", "SNAPE", "NOOP",
+            "FR00", "FL00", "FW30", "BR00", "FW10", "SNAPN", "NOOP",
+            "FR00", "FL00", "FW30", "BR00", "FW10", "SNAPW", "NOOP",
+            "FIN"
+        ]
+
+        # put commands and paths into queues
+        self.clear_queues()
+        for c in hardcoded_path:
+            self.command_queue.put(c)
+            self.path_queue.put({
+                "d": 0,
+                "s": -1,
+                "x": 1,
+                "y": 1
+            })
+
+        self.logger.info("Navigate-around-obstacle path loaded. Robot is ready to move.")
+        self.android_outgoing_queue.put(
+            AndroidMessage(cat="info", value="Navigate-around-obstacle path loaded. Robot is ready to move."))
 
     def change_mode(self, new_mode):
         # if robot already in correct mode
