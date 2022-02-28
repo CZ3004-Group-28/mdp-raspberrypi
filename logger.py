@@ -11,7 +11,7 @@ def prepare_logger():
     if not logger.hasHandlers():
         # console handler
         console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.INFO)
+        console_handler.setLevel(logging.DEBUG)
         console_handler.setFormatter(log_format)
 
         # file handler
