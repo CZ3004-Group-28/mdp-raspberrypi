@@ -368,17 +368,17 @@ class RaspberryPi:
         # release lock so that bot can continue moving
         self.movement_lock.release()
 
-    def request_algo(self, data: str, around: bool = False):
+    def request_algo(self, data: str):
         """
         Requests for a series of commands and the path from the algo API
         The received commands and path are then queued in the respective queues
         If around=true, will call the /navigate endpoint instead, else /path is used
         """
-        if not around:
-            url = f"http://{API_IP}:{API_PORT}/path"
-        else:
-            url = f"http://{API_IP}:{API_PORT}/navigate"
 
+        self.logger.info("Requesting path from algo...")
+        self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Requesting path from algo..."))
+
+        url = f"http://{API_IP}:{API_PORT}/path"
         response = requests.post(url, json=data)
 
         if response.status_code != 200:
