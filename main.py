@@ -152,11 +152,12 @@ class RaspberryPi:
 
     def recv_android(self) -> None:
         while True:
+            msg_str = None
             try:
                 msg_str = self.android_link.recv()
             except OSError:
                 self.android_dropped.set()
-                self.logger.debug("Event set: Android dropped")
+                self.logger.debug("Event set: Android connection dropped")
 
             # if an error occurred in recv()
             if msg_str is None:
@@ -189,10 +190,18 @@ class RaspberryPi:
                         AndroidMessage(cat="error", value="Robot must be in Path mode to set obstacles."))
                     self.logger.warning("Robot must be in Path mode to set obstacles.")
 
-            # commencing path following
+            # control commands
             elif message['cat'] == "control":
-                if self.robot_mode.value == 1:  # robot must be in path mode
-                    if message['value'] == "start":
+                if message['value'] == "start":
+                    # robot must be in path mode
+                    if self.robot_mode.value == 1:
+                        # check api
+                        if not self.check_api():
+                            self.logger.error("API is down, start command aborted.")
+                            self.android_outgoing_queue.put(
+                                AndroidMessage(cat='error', value="API is down, start command aborted."))
+
+                        # commencing path following
                         if not self.command_queue.empty():
                             self.unpause.set()
                             self.logger.info("Start command received, starting robot on path!")
@@ -201,12 +210,12 @@ class RaspberryPi:
                             self.logger.warning("The command queue is empty, please set obstacles.")
                             self.android_outgoing_queue.put(
                                 AndroidMessage(cat="error", value="Command queue is empty, did you set obstacles?"))
-                else:
-                    self.android_outgoing_queue.put(
-                        AndroidMessage(cat="error", value="Robot must be in Path mode to start robot on path."))
-                    self.logger.warning("Robot must be in Path mode to start robot on path.")
+                    else:
+                        self.android_outgoing_queue.put(
+                            AndroidMessage(cat="error", value="Robot must be in Path mode to start robot on path."))
+                        self.logger.warning("Robot must be in Path mode to start robot on path.")
 
-            # around obstacle
+            # navigate around obstacle
             elif message['cat'] == "single-obstacle":
                 if self.robot_mode.value == 1:  # robot must be in path mode
                     self.rpi_action_queue.put(PiAction(**message))
@@ -315,7 +324,6 @@ class RaspberryPi:
             elif action.cat == "stitch":
                 self.request_stitch()
 
-
     def snap_and_rec(self, obstacle_id: str) -> None:
         """
         RPi snaps an image and calls the API for image-rec.
@@ -386,6 +394,9 @@ class RaspberryPi:
 
         # parse response
         data = json.loads(response.content)['data']
+
+        # log commands received
+        self.logger.debug(f"Path received from API: {data['commands']}")
 
         # put commands and paths into queues
         self.clear_queues()
@@ -466,6 +477,23 @@ class RaspberryPi:
             self.command_queue.get()
         while not self.path_queue.empty():
             self.path_queue.get()
+
+    def check_api(self) -> bool:
+        # todo: remove this after API implemented
+        return True
+
+        url = f"http://{API_IP}:{API_PORT}/health"
+        try:
+            response = requests.get(url, timeout=1)
+            if response.status_code == 200:
+                self.logger.debug("API is up!")
+                return True
+        except ConnectionError:
+            self.logger.warning("API Connection Error")
+            return False
+        except requests.Timeout:
+            self.logger.warning("API Timeout")
+            return False
 
 
 if __name__ == "__main__":

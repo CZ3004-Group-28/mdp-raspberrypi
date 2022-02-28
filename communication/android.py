@@ -6,7 +6,6 @@ from typing import Optional
 import bluetooth
 
 from communication.communicator import Link
-from logger import prepare_logger
 
 
 class AndroidMessage:
@@ -74,7 +73,7 @@ class AndroidLink(Link):
             self.server_sock.close()
             self.client_sock = None
             self.server_sock = None
-            self.logger.debug("Disconnected bluetooth link")
+            self.logger.info("Disconnected bluetooth link")
         except Exception as e:
             self.logger.error(f"Failed to disconnect bluetooth link: {e}")
 
