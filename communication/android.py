@@ -13,9 +13,9 @@ class AndroidMessage:
     Represents an outgoing Android message
     cat: [info, error, location]
     """
-    def __init__(self, **kwargs):
-        self._cat = kwargs.get('cat')
-        self._value = kwargs.get('value')
+    def __init__(self, cat, value):
+        self._cat = cat
+        self._value = value
 
     @property
     def cat(self):

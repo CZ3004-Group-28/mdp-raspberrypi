@@ -59,7 +59,7 @@ class RaspberryPi:
         self.movement_lock = manager.Lock()
 
         # queues
-        self.android_outgoing_queue = manager.Queue()
+        self.android_queue = manager.Queue()
         self.rpi_action_queue = manager.Queue()
         self.command_queue = manager.Queue()
         self.path_queue = manager.Queue()
@@ -75,7 +75,7 @@ class RaspberryPi:
         try:
             # establish bluetooth connection with Android
             self.android_link.connect()
-            self.android_outgoing_queue.put(AndroidMessage(cat='info', value='You are connected to the RPi!'))
+            self.android_queue.put(AndroidMessage('info', 'You are connected to the RPi!'))
 
             # establish connection with STM32
             self.stm_link.connect()
@@ -97,7 +97,7 @@ class RaspberryPi:
             self.proc_rpi_action.start()
 
             self.logger.info("Child Processes started")
-            self.android_outgoing_queue.put(AndroidMessage(cat='info', value='Robot is ready!'))
+            self.android_queue.put(AndroidMessage('info', 'Robot is ready!'))
 
             # reconnect handler to watch over android connection
             self.reconnect_android()
@@ -146,7 +146,7 @@ class RaspberryPi:
             self.proc_android_sender.start()
 
             self.logger.info("Android child processes restarted")
-            self.android_outgoing_queue.put(AndroidMessage(cat="info", value="You are reconnected!"))
+            self.android_queue.put(AndroidMessage("info", "You are reconnected!"))
 
             self.android_dropped.clear()
 
@@ -176,8 +176,7 @@ class RaspberryPi:
                     self.command_queue.put(message['value'])
                     self.logger.debug(f"Manual Movement added to command queue: {message['value']}")
                 else:
-                    self.android_outgoing_queue.put(
-                        AndroidMessage(cat="error", value="Manual movement not allowed in Path mode."))
+                    self.android_queue.put(AndroidMessage("error", "Manual movement not allowed in Path mode."))
                     self.logger.warning("Manual movement not allowed in Path mode.")
 
             # set obstacles
@@ -186,8 +185,7 @@ class RaspberryPi:
                     self.rpi_action_queue.put(PiAction(**message))
                     self.logger.debug(f"Set obstacles PiAction added to queue: {message}")
                 else:
-                    self.android_outgoing_queue.put(
-                        AndroidMessage(cat="error", value="Robot must be in Path mode to set obstacles."))
+                    self.android_queue.put(AndroidMessage("error", "Robot must be in Path mode to set obstacles."))
                     self.logger.warning("Robot must be in Path mode to set obstacles.")
 
             # control commands
@@ -198,21 +196,18 @@ class RaspberryPi:
                         # check api
                         if not self.check_api():
                             self.logger.error("API is down, start command aborted.")
-                            self.android_outgoing_queue.put(
-                                AndroidMessage(cat='error', value="API is down, start command aborted."))
+                            self.android_queue.put(AndroidMessage('error', "API is down, start command aborted."))
 
                         # commencing path following
                         if not self.command_queue.empty():
                             self.unpause.set()
                             self.logger.info("Start command received, starting robot on path!")
-                            self.android_outgoing_queue.put(AndroidMessage(cat='info', value='Starting robot on path!'))
+                            self.android_queue.put(AndroidMessage('info', 'Starting robot on path!'))
                         else:
                             self.logger.warning("The command queue is empty, please set obstacles.")
-                            self.android_outgoing_queue.put(
-                                AndroidMessage(cat="error", value="Command queue is empty, did you set obstacles?"))
+                            self.android_queue.put(AndroidMessage("error", "Command queue is empty, did you set obstacles?"))
                     else:
-                        self.android_outgoing_queue.put(
-                            AndroidMessage(cat="error", value="Robot must be in Path mode to start robot on path."))
+                        self.android_queue.put(AndroidMessage("error", "Robot must be in Path mode to start robot on path."))
                         self.logger.warning("Robot must be in Path mode to start robot on path.")
 
             # navigate around obstacle
@@ -221,8 +216,7 @@ class RaspberryPi:
                     self.rpi_action_queue.put(PiAction(**message))
                     self.logger.debug(f"Single-obstacle PiAction added to queue: {message}")
                 else:
-                    self.android_outgoing_queue.put(
-                        AndroidMessage(cat="error", value="Robot must be in Path mode to set single obstacle."))
+                    self.android_queue.put(AndroidMessage("error", "Robot must be in Path mode to set single obstacle."))
                     self.logger.warning("Robot must be in Path mode to set single obstacle.")
 
     def recv_stm(self) -> None:
@@ -232,6 +226,7 @@ class RaspberryPi:
         while True:
             message = self.stm_link.recv()
 
+            # acknowledgement from STM32
             if message.startswith("ACK"):
                 # release movement lock
                 self.movement_lock.release()
@@ -256,7 +251,7 @@ class RaspberryPi:
         while True:
             # retrieve from queue
             try:
-                message: AndroidMessage = self.android_outgoing_queue.get(timeout=0.5)
+                message: AndroidMessage = self.android_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
 
@@ -303,7 +298,7 @@ class RaspberryPi:
                 self.unpause.clear()
                 self.movement_lock.release()
                 self.logger.info("Commands queue finished.")
-                self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Commands queue finished."))
+                self.android_queue.put(AndroidMessage("info", "Commands queue finished."))
                 self.rpi_action_queue.put(PiAction(cat="stitch", value=""))
             else:
                 raise Exception(f"Unknown command: {command}")
@@ -333,8 +328,7 @@ class RaspberryPi:
 
         # notify android
         self.logger.info(f"Capturing image for obstacle id: {obstacle_id}")
-        self.android_outgoing_queue.put(
-            AndroidMessage(cat="info", value=f"Capturing image for obstacle id: {obstacle_id}"))
+        self.android_queue.put(AndroidMessage("info", f"Capturing image for obstacle id: {obstacle_id}"))
 
         # capture an image
         stream = io.BytesIO()
@@ -344,8 +338,7 @@ class RaspberryPi:
             camera.capture(stream, format='jpeg')
 
         # notify android
-        self.android_outgoing_queue.put(
-            AndroidMessage(cat="info", value="Image captured. Calling image-rec api..."))
+        self.android_queue.put(AndroidMessage("info", "Image captured. Calling image-rec api..."))
         self.logger.info("Image captured. Calling image-rec api...")
 
         # call image-rec API endpoint
@@ -365,13 +358,12 @@ class RaspberryPi:
             while not self.command_queue.empty():
                 self.command_queue.get()
             self.logger.info("Found non-bullseye face, remaining commands and path cleared.")
-            self.android_outgoing_queue.put(
-                AndroidMessage(cat="info", value="Found non-bullseye face, remaining commands and path cleared."))
+            self.android_queue.put(AndroidMessage("info", "Found non-bullseye face, remaining commands and path cleared."))
 
         self.logger.info(f"Image recognition results: {results}")
 
         # notify android
-        self.android_outgoing_queue.put(AndroidMessage(cat="image-rec", value=results))
+        self.android_queue.put(AndroidMessage("image-rec", results))
 
         # release lock so that bot can continue moving
         self.movement_lock.release()
@@ -384,7 +376,7 @@ class RaspberryPi:
         """
 
         self.logger.info("Requesting path from algo...")
-        self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Requesting path from algo..."))
+        self.android_queue.put(AndroidMessage("info", "Requesting path from algo..."))
 
         url = f"http://{API_IP}:{API_PORT}/path"
         response = requests.post(url, json=data)
@@ -408,8 +400,7 @@ class RaspberryPi:
         self.logger.info("Commands and path received Algo API. Robot is ready to move.")
 
         # notify android
-        self.android_outgoing_queue.put(
-            AndroidMessage(cat="info", value="Commands and path received Algo API. Robot is ready to move."))
+        self.android_queue.put(AndroidMessage("info", "Commands and path received Algo API. Robot is ready to move."))
 
     def add_navigate_path(self):
         # our hardcoded path
@@ -433,8 +424,7 @@ class RaspberryPi:
             })
 
         self.logger.info("Navigate-around-obstacle path loaded. Robot is ready to move.")
-        self.android_outgoing_queue.put(
-            AndroidMessage(cat="info", value="Navigate-around-obstacle path loaded. Robot is ready to move."))
+        self.android_queue.put(AndroidMessage("info", "Navigate-around-obstacle path loaded. Robot is ready to move."))
 
     def request_stitch(self):
         url = f"http://{API_IP}:{API_PORT}/stitch"
@@ -444,15 +434,15 @@ class RaspberryPi:
             raise Exception("Something went wrong when requesting path from Algo API.")
 
         self.logger.info("Images stitched!")
-        self.android_outgoing_queue.put(AndroidMessage(cat="info", value="Images stitched!"))
+        self.android_queue.put(AndroidMessage("info", "Images stitched!"))
 
     def change_mode(self, new_mode):
         # if robot already in correct mode
         if new_mode == "manual" and self.robot_mode.value == 0:
-            self.android_outgoing_queue.put(AndroidMessage(cat='error', value='Robot already in Manual mode.'))
+            self.android_queue.put(AndroidMessage('error', 'Robot already in Manual mode.'))
             self.logger.warning("Robot already in Manual mode.")
         elif new_mode == "path" and self.robot_mode.value == 1:
-            self.android_outgoing_queue.put(AndroidMessage(cat='error', value='Robot already in Path mode.'))
+            self.android_queue.put(AndroidMessage('error', 'Robot already in Path mode.'))
             self.logger.warning("Robot already in Path mode.")
         else:
             # change robot mode
@@ -468,8 +458,7 @@ class RaspberryPi:
                 self.unpause.clear()
 
             # notify android
-            self.android_outgoing_queue.put(
-                AndroidMessage(cat='info', value=f'Robot is now in {new_mode.title()} mode.'))
+            self.android_queue.put(AndroidMessage('info', f'Robot is now in {new_mode.title()} mode.'))
             self.logger.info(f"Robot is now in {new_mode.title()} mode.")
 
     def clear_queues(self):
