@@ -231,18 +231,22 @@ class RaspberryPi:
             # acknowledgement from STM32
             if message.startswith("ACK"):
                 # release movement lock
-                self.movement_lock.release()
-                self.logger.debug("ACK from STM32 received, movement lock released.")
+                try:
+                    self.movement_lock.release()
+                    self.logger.debug("ACK from STM32 received, movement lock released.")
 
-                # if in path mode, get new location and notify android
-                if self.robot_mode.value == 1:
-                    temp = self.path_queue.get()
-                    location = {
-                        "x": temp['x'],
-                        "y": temp['y'],
-                        "d": temp['d'],
-                    }
-                    self.android_outgoing_queue.put(AndroidMessage(cat='location', value=location))
+                    # if in path mode, get new location and notify android
+                    if self.robot_mode.value == 1:
+                        temp = self.path_queue.get_nowait()
+                        location = {
+                            "x": temp['x'],
+                            "y": temp['y'],
+                            "d": temp['d'],
+                        }
+                        self.android_queue.put(AndroidMessage('location', location))
+
+                except ValueError:
+                    self.logger.warning("Tried to release a released lock!")
             else:
                 raise Exception(f"Unknown message from STM32: {message}")
 
@@ -458,6 +462,12 @@ class RaspberryPi:
                 self.unpause.set()
             else:
                 self.unpause.clear()
+
+            # release movement lock, if it was previously acquired
+            try:
+                self.movement_lock.release()
+            except ValueError:
+                self.logger.warning("Tried to release a released lock!")
 
             # notify android
             self.android_queue.put(AndroidMessage('info', f'Robot is now in {new_mode.title()} mode.'))
