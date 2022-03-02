@@ -245,7 +245,7 @@ class RaspberryPi:
                         }
                         self.android_queue.put(AndroidMessage('location', location))
 
-                except ValueError:
+                except Exception:
                     self.logger.warning("Tried to release a released lock!")
             else:
                 raise Exception(f"Unknown message from STM32: {message}")
@@ -347,6 +347,9 @@ class RaspberryPi:
         self.android_queue.put(AndroidMessage("info", "Image captured. Calling image-rec api..."))
         self.logger.info("Image captured. Calling image-rec api...")
 
+        # release lock so that bot can continue moving
+        self.movement_lock.release()
+
         # call image-rec API endpoint
         self.logger.debug("Requesting from image API")
         url = f"http://{API_IP}:{API_PORT}/image"
@@ -370,9 +373,6 @@ class RaspberryPi:
 
         # notify android
         self.android_queue.put(AndroidMessage("image-rec", results))
-
-        # release lock so that bot can continue moving
-        self.movement_lock.release()
 
     def request_algo(self, data: str):
         """
@@ -466,7 +466,7 @@ class RaspberryPi:
             # release movement lock, if it was previously acquired
             try:
                 self.movement_lock.release()
-            except ValueError:
+            except Exception:
                 self.logger.warning("Tried to release a released lock!")
 
             # notify android
