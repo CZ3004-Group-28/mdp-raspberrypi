@@ -98,6 +98,7 @@ class RaspberryPi:
 
             self.logger.info("Child Processes started")
             self.android_queue.put(AndroidMessage('info', 'Robot is ready!'))
+            self.android_queue.put(AndroidMessage('mode', 'path' if self.robot_mode.value == 1 else 'manual'))
 
             # reconnect handler to watch over android connection
             self.reconnect_android()
@@ -147,6 +148,7 @@ class RaspberryPi:
 
             self.logger.info("Android child processes restarted")
             self.android_queue.put(AndroidMessage("info", "You are reconnected!"))
+            self.android_queue.put(AndroidMessage('mode', 'path' if self.robot_mode.value == 1 else 'manual'))
 
             self.android_dropped.clear()
 
