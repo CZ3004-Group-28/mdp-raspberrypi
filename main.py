@@ -280,7 +280,7 @@ class RaspberryPi:
             self.movement_lock.acquire()
 
             # STM32 commands
-            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "DT", "STOP")):
+            if command.startswith(("FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "DT", "STOP", "ZZ")):
                 self.stm_link.send(command)
 
             # snap command (path mode)
@@ -472,6 +472,9 @@ class RaspberryPi:
             # notify android
             self.android_queue.put(AndroidMessage('info', f'Robot is now in {new_mode.title()} mode.'))
             self.logger.info(f"Robot is now in {new_mode.title()} mode.")
+
+            # buzz stm32
+            self.command_queue.put("ZZ02")
 
     def clear_queues(self):
         while not self.command_queue.empty():
