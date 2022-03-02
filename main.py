@@ -353,7 +353,7 @@ class RaspberryPi:
         # call image-rec API endpoint
         self.logger.debug("Requesting from image API")
         url = f"http://{API_IP}:{API_PORT}/image"
-        filename = f"{obstacle_id}_{int(time.time())}.jpeg"
+        filename = f"{int(time.time())}_{obstacle_id}.jpg"
         image_data = stream.getvalue()
         response = requests.post(url, files={"file": (filename, image_data)})
 
