@@ -77,7 +77,6 @@ class AndroidLink(Link):
         except Exception as e:
             self.logger.error(f"Failed to disconnect bluetooth link: {e}")
 
-    # todo: broken pipe error when trying to send messages after re-connection
     def send(self, message: AndroidMessage):
         try:
             self.client_sock.send(f"{message.jsonify}\n".encode("utf-8"))

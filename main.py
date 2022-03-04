@@ -5,6 +5,7 @@ import json
 import queue
 import time
 from multiprocessing import Process, Manager
+from typing import Optional, List
 
 import picamera
 import requests
@@ -164,7 +165,7 @@ class RaspberryPi:
 
     def recv_android(self) -> None:
         while True:
-            msg_str = None
+            msg_str: Optional[str] = None
             try:
                 msg_str = self.android_link.recv()
             except OSError:
@@ -175,7 +176,7 @@ class RaspberryPi:
             if msg_str is None:
                 continue
 
-            message = json.loads(msg_str)
+            message: dict = json.loads(msg_str)
 
             # change mode command
             if message['cat'] == "mode":
@@ -239,7 +240,7 @@ class RaspberryPi:
         Receive acknowledgement messages from STM32, and release the movement lock
         """
         while True:
-            message = self.stm_link.recv()
+            message: str = self.stm_link.recv()
 
             # acknowledgement from STM32
             if message.startswith("ACK"):
@@ -257,11 +258,10 @@ class RaspberryPi:
                             "d": temp['d'],
                         }
                         self.android_queue.put(AndroidMessage('location', location))
-
                 except Exception:
                     self.logger.warning("Tried to release a released lock!")
             else:
-                raise Exception(f"Unknown message from STM32: {message}")
+                self.logger.warning(f"Ignored unknown message from STM: {message}")
 
     def android_sender(self) -> None:
         """
@@ -284,7 +284,7 @@ class RaspberryPi:
     def command_follower(self) -> None:
         while True:
             # retrieve next movement command
-            command = self.command_queue.get()
+            command: str = self.command_queue.get()
 
             # wait for unpause event to be true
             self.unpause.wait()
@@ -377,16 +377,21 @@ class RaspberryPi:
 
         results = json.loads(response.content)
 
+        # for stopping the robot upon finding a non-bullseye face (checklist: navigating around obstacle)
         if results.get("stop"):
+            # stop issuing commands
             self.unpause.clear()
+
+            # clear commands queue
             while not self.command_queue.empty():
                 self.command_queue.get()
+
             self.logger.info("Found non-bullseye face, remaining commands and path cleared.")
-            self.android_queue.put(AndroidMessage("info", "Found non-bullseye face, remaining commands and path cleared."))
+            self.android_queue.put(AndroidMessage("info", "Found non-bullseye face, remaining commands cleared."))
 
         self.logger.info(f"Image recognition results: {results}")
 
-        # notify android
+        # notify android of image-rec results
         self.android_queue.put(AndroidMessage("image-rec", results))
 
     def request_algo(self, data: str):
@@ -402,14 +407,18 @@ class RaspberryPi:
         url = f"http://{API_IP}:{API_PORT}/path"
         response = requests.post(url, json=data)
 
+        # error encountered at the server, return early
         if response.status_code != 200:
-            raise Exception("Something went wrong when requesting path from Algo API.")
+            # notify android
+            self.android_queue.put(AndroidMessage("error", "Something went wrong when requesting path from Algo API."))
+            self.logger.error("Something went wrong when requesting path from Algo API.")
+            return
 
         # parse response
         data = json.loads(response.content)['data']
 
         # log commands received
-        self.logger.debug(f"Path received from API: {data['commands']}")
+        self.logger.debug(f"Commands received from API: {data['commands']}")
 
         # put commands and paths into queues
         self.clear_queues()
@@ -418,14 +427,13 @@ class RaspberryPi:
         for p in data['path'][1:]:  # ignore first element as it is the starting position of the robot
             self.path_queue.put(p)
 
-        self.logger.info("Commands and path received Algo API. Robot is ready to move.")
-
         # notify android
         self.android_queue.put(AndroidMessage("info", "Commands and path received Algo API. Robot is ready to move."))
+        self.logger.info("Commands and path received Algo API. Robot is ready to move.")
 
     def add_navigate_path(self):
         # our hardcoded path
-        hardcoded_path = [
+        hardcoded_path: List[str] = [
             "DT20", "SNAPS", "NOOP",
             "FR00", "FL00", "FW30", "BR00", "FW10", "SNAPE", "NOOP",
             "FR00", "FL00", "FW30", "BR00", "FW10", "SNAPN", "NOOP",
@@ -451,8 +459,12 @@ class RaspberryPi:
         url = f"http://{API_IP}:{API_PORT}/stitch"
         response = requests.get(url)
 
+        # error encountered at the server, return early
         if response.status_code != 200:
-            raise Exception("Something went wrong when requesting path from Algo API.")
+            # notify android
+            self.android_queue.put(AndroidMessage("error", "Something went wrong when requesting stitch from the API."))
+            self.logger.error("Something went wrong when requesting stitch from the API.")
+            return
 
         self.logger.info("Images stitched!")
         self.android_queue.put(AndroidMessage("info", "Images stitched!"))

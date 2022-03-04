@@ -24,7 +24,6 @@ class STMLink(Link):
         self.logger.debug(f"Sent to STM32: {message}")
 
     def recv(self) -> Optional[str]:
-        # todo: check possible values for message
         message = self.serial_link.readline().strip().decode("utf-8")
         self.logger.debug(f"Received from STM32: {message}")
         return message

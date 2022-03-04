@@ -1,7 +1,7 @@
 import logging
 
 
-def prepare_logger():
+def prepare_logger() -> logging.Logger:
 
     log_format = logging.Formatter('%(asctime)s :: %(levelname)s :: %(message)s')
 
