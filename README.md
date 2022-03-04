@@ -99,6 +99,7 @@ The RPi will send messages to the Android app in the following format:
 - `error`: error messages, usually in response of an invalid action
 - `location`: the current location of the robot (in Path mode)
 - `image-rec`: image recognition results
+- `mode`: the current mode of the robot (`manual` or `path`)
 
 #### Image recognition results
 ```json
@@ -113,6 +114,13 @@ In Path mode, the robot will periodically notify android with the updated locati
 ```
 where `x`, `y` is the location of the robot, and `d` is its direction.
 
+#### Robot Mode
+This message is sent to the Android upon the initial Bluetooth connection and subsequent reconnections.
+```json
+{"cat": "mode", "value": "path"}
+{"cat": "mode", "value": "manual"}
+```
+
 ---
 
 ### STM32 to RPi
@@ -124,7 +132,8 @@ This signals to the RPi that the STM32 has completed the command, and is ready f
 ### RPi to STM32
 The RPi will only send the following commands to the STM32.
 
-#### Path mode commands:
+#### Path mode commands
+Indoors: High speed forward/backward, smaller turning radius of `3x1`
 - `FW0x`: Move forward `x` units
 - `BW0x`: Move backward `x` units
 - `FL00`: Move to the forward-left location
@@ -132,9 +141,26 @@ The RPi will only send the following commands to the STM32.
 - `BL00`: Move to the backward-left location
 - `BR00`: Move to the backward-right location
 
-#### Manual mode commands:
+Outdoors: Slow speed forward/backward, larger turning radius of `4x2`
+- `FS0x`: Move forward `x` units
+- `BS0x`: Move backward `x` units
+- `FL30`: Move to the forward-left location
+- `FR30`: Move to the forward-right location
+- `BL30`: Move to the backward-left location
+- `BR30`: Move to the backward-right location
+
+#### Manual mode commands
 - `FW--`: Move forward indefinitely
 - `BW--`: Move backward indefinitely
 - `TL--`: Steer left indefinitely
 - `TR--`: Steer right indefinitely
 - `STOP`: Stop all servos
+
+#### Miscellaneous commands
+- `ZZ0x`: Buzz the buzzer `x` times
+
+## Buzzer
+- 1 buzz  : Robot Mode changed `or` Robot finished path
+- 2 buzzes: Bluetooth device connected
+- 3 buzzes: Bluetooth disconnected
+- 4 buzzes: API is down, start command aborted
