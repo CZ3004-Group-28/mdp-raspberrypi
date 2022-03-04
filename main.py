@@ -80,7 +80,8 @@ class RaspberryPi:
             # establish connection with STM32
             self.stm_link.connect()
 
-            # todo: ping test to API
+            # check api status
+            self.check_api()
 
             # define processes
             self.proc_recv_android = Process(target=self.recv_android)
@@ -197,7 +198,7 @@ class RaspberryPi:
                     if self.robot_mode.value == 1:
                         # check api
                         if not self.check_api():
-                            self.logger.error("API is down, start command aborted.")
+                            self.logger.error("API is down! Start command aborted.")
                             self.android_queue.put(AndroidMessage('error', "API is down, start command aborted."))
 
                         # commencing path following
@@ -483,10 +484,7 @@ class RaspberryPi:
             self.path_queue.get()
 
     def check_api(self) -> bool:
-        # todo: remove this after API implemented
-        return True
-
-        url = f"http://{API_IP}:{API_PORT}/health"
+        url = f"http://{API_IP}:{API_PORT}/status"
         try:
             response = requests.get(url, timeout=1)
             if response.status_code == 200:
