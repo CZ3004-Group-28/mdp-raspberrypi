@@ -101,6 +101,9 @@ class RaspberryPi:
             self.android_queue.put(AndroidMessage('info', 'Robot is ready!'))
             self.android_queue.put(AndroidMessage('mode', 'path' if self.robot_mode.value == 1 else 'manual'))
 
+            # buzz STM32 (2 times)
+            self.stm_link.send("ZZ02")
+
             # reconnect handler to watch over android connection
             self.reconnect_android()
 
@@ -120,6 +123,9 @@ class RaspberryPi:
             self.android_dropped.wait()
 
             self.logger.error("Android link is down!")
+
+            # buzz STM32 (3 times)
+            self.stm_link.send("ZZ03")
 
             # kill child processes
             self.logger.debug("Killing android child processes")
@@ -150,6 +156,9 @@ class RaspberryPi:
             self.logger.info("Android child processes restarted")
             self.android_queue.put(AndroidMessage("info", "You are reconnected!"))
             self.android_queue.put(AndroidMessage('mode', 'path' if self.robot_mode.value == 1 else 'manual'))
+
+            # buzz STM32 (2 times)
+            self.stm_link.send("ZZ02")
 
             self.android_dropped.clear()
 
@@ -200,6 +209,9 @@ class RaspberryPi:
                         if not self.check_api():
                             self.logger.error("API is down! Start command aborted.")
                             self.android_queue.put(AndroidMessage('error', "API is down, start command aborted."))
+
+                            # buzz STM32 (4 times)
+                            self.stm_link.send("ZZ04")
 
                         # commencing path following
                         if not self.command_queue.empty():
@@ -301,6 +313,7 @@ class RaspberryPi:
 
             # end of path
             elif command == "FIN":
+                self.stm_link.send("ZZ01")
                 # clear the unpause event (no new command will be retrieved from queue)
                 self.unpause.clear()
                 self.movement_lock.release()
@@ -474,8 +487,8 @@ class RaspberryPi:
             self.android_queue.put(AndroidMessage('info', f'Robot is now in {new_mode.title()} mode.'))
             self.logger.info(f"Robot is now in {new_mode.title()} mode.")
 
-            # buzz stm32
-            self.command_queue.put("ZZ02")
+            # buzz stm32 (1 time)
+            self.stm_link.send("ZZ01")
 
     def clear_queues(self):
         while not self.command_queue.empty():
