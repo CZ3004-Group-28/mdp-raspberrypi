@@ -1,13 +1,38 @@
+import json
 import os
 import socket
 from typing import Optional
 
 import bluetooth
-from communication.communicator import Link, AndroidMessage
+
+from communication.communicator import Link
+
+
+class AndroidMessage:
+    """
+    Represents an outgoing Android message
+    cat: [info, error, location]
+    """
+    def __init__(self, cat, value):
+        self._cat = cat
+        self._value = value
+
+    @property
+    def cat(self):
+        return self._cat
+
+    @property
+    def value(self):
+        return self._value
+
+    @property
+    def jsonify(self) -> str:
+        return json.dumps({'cat': self._cat, 'value': self._value})
 
 
 class AndroidLink(Link):
     def __init__(self):
+        super().__init__()
         self.server_sock = None
         self.client_sock = None
 
@@ -30,45 +55,41 @@ class AndroidLink(Link):
                                         service_classes=[uuid, bluetooth.SERIAL_PORT_CLASS],
                                         profiles=[bluetooth.SERIAL_PORT_PROFILE])
 
-            print(f"[-] Waiting for bluetooth connection on RFCOMM CHANNEL {port}...")
+            self.logger.info(f"Waiting for bluetooth connection on RFCOMM CHANNEL {port}...")
             self.client_sock, client_info = self.server_sock.accept()
-            print("[✔] Accepted connection from", client_info)
+            self.logger.info(f"Accepted connection from: {client_info}")
 
         except Exception as e:
-            print(e)
+            self.logger.error(f"Error in bluetooth link connection: {e}")
             self.server_sock.close()
             self.client_sock.close()
 
     def disconnect(self):
         try:
-            print("[-] Disconnecting...")
+            self.logger.debug("Disconnecting bluetooth link")
             self.server_sock.shutdown(socket.SHUT_RDWR)
             self.client_sock.shutdown(socket.SHUT_RDWR)
             self.client_sock.close()
             self.server_sock.close()
             self.client_sock = None
             self.server_sock = None
-            print("[✔] Disconnected")
+            self.logger.info("Disconnected bluetooth link")
         except Exception as e:
-            print("Disconnecting failed", e)
-            exit()
+            self.logger.error(f"Failed to disconnect bluetooth link: {e}")
 
-    # todo: broken pipe error when trying to send messages after re-connection
     def send(self, message: AndroidMessage):
         try:
-            self.client_sock.send(f"{message.json_str}\n".encode("utf-8"))
+            self.client_sock.send(f"{message.jsonify}\n".encode("utf-8"))
+            self.logger.debug(f"Sent to Android: {message.jsonify}")
         except OSError as e:
-            print("[!] Error sending message to android:", e)
-            self.disconnect()
-            self.connect()  # try to reconnect
-            self.send(message)  # retry sending
+            self.logger.error(f"Error sending message to android: {e}")
+            raise e
 
     def recv(self) -> Optional[str]:
         try:
             message = self.client_sock.recv(1024).strip().decode("utf-8")
+            self.logger.debug(f"Received from Android: {message}")
             return message
         except OSError as e:  # connection broken, try to reconnect
-            print("[!] Error receiving message from android:", e)
-            self.disconnect()
-            self.connect()
-        return None
+            self.logger.error(f"Error receiving message from android: {e}")
+            raise e
