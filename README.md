@@ -35,12 +35,22 @@ The following commands are only valid if the robot is currently operating in the
 ##### Set obstacles
 RPi will make a call to the Algorithms API and store the received commands and path.
 
-The contents of `value` will be passed directly to the Algorithm API, so please refer to the format for the `/path` endpoint.
+The contents of `obstacles` together with the configured turning radius (`settings.py`) will be passed to the Algorithm API.<br/>
+Please refer to the format for the `/path` endpoint.
 Reference: https://github.com/CZ3004-Group-28/Algo
 
 ```json
-{"cat": "obstacles", "value": {"obstacles": [{"x": 5, "y": 10, "id": 1, "d": 2}]}}
+{
+  "cat": "obstacles",
+  "value": {
+    "obstacles": [{"x": 5, "y": 10, "id": 1, "d": 2}],
+    "mode": "0"
+  }
+}
 ```
+Mode:
+- `0`: indoors
+- `1`: outdoors
 
 ##### Navigate around obstacle
 RPi will make a call to the Algorithms API and store the received commands and path.
@@ -100,6 +110,7 @@ The RPi will send messages to the Android app in the following format:
 - `location`: the current location of the robot (in Path mode)
 - `image-rec`: image recognition results
 - `mode`: the current mode of the robot (`manual` or `path`)
+- `status`: status updates of the robot (`running` or `finished`)
 
 #### Image recognition results
 ```json
@@ -133,7 +144,7 @@ This signals to the RPi that the STM32 has completed the command, and is ready f
 The RPi will only send the following commands to the STM32.
 
 #### Path mode commands
-Indoors: High speed forward/backward, smaller turning radius of `3x1`
+Indoors: High speed forward/backward, with turning radius of `3x1`
 - `FW0x`: Move forward `x` units
 - `BW0x`: Move backward `x` units
 - `FL00`: Move to the forward-left location
@@ -141,13 +152,17 @@ Indoors: High speed forward/backward, smaller turning radius of `3x1`
 - `BL00`: Move to the backward-left location
 - `BR00`: Move to the backward-right location
 
-Outdoors: Slow speed forward/backward, larger turning radius of `4x2`
+Outdoors: Slow speed forward/backward, with turning radius of `3x1` or `4x2` (configurable in `settings.py`)
 - `FS0x`: Move forward `x` units
 - `BS0x`: Move backward `x` units
-- `FL30`: Move to the forward-left location
-- `FR30`: Move to the forward-right location
-- `BL30`: Move to the backward-left location
-- `BR30`: Move to the backward-right location
+- `FL20`: Move to the forward-left location (turning radius `3x1`)
+- `FR20`: Move to the forward-right location (turning radius `3x1`)
+- `BL20`: Move to the backward-left location (turning radius `3x1`)
+- `BR20`: Move to the backward-right location (turning radius `3x1`)
+- `FL30`: Move to the forward-left location (turning radius `4x2`)
+- `FR30`: Move to the forward-right location (turning radius `4x2`)
+- `BL30`: Move to the backward-left location (turning radius `4x2`)
+- `BR30`: Move to the backward-right location (turning radius `4x2`)
 
 #### Manual mode commands
 - `FW--`: Move forward indefinitely
