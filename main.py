@@ -219,6 +219,7 @@ class RaspberryPi:
                             self.unpause.set()
                             self.logger.info("Start command received, starting robot on path!")
                             self.android_queue.put(AndroidMessage('info', 'Starting robot on path!'))
+                            self.android_queue.put(AndroidMessage('status', 'running'))
                         else:
                             self.logger.warning("The command queue is empty, please set obstacles.")
                             self.android_queue.put(AndroidMessage("error", "Command queue is empty, did you set obstacles?"))
@@ -293,7 +294,7 @@ class RaspberryPi:
             self.movement_lock.acquire()
 
             # STM32 commands
-            stm32_prefixes = ("FS", "BW", "FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "DT", "STOP", "ZZ")
+            stm32_prefixes = ("FS", "BS", "FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "DT", "STOP", "ZZ")
             if command.startswith(stm32_prefixes):
                 self.stm_link.send(command)
 
@@ -320,6 +321,7 @@ class RaspberryPi:
                 self.movement_lock.release()
                 self.logger.info("Commands queue finished.")
                 self.android_queue.put(AndroidMessage("info", "Commands queue finished."))
+                self.android_queue.put(AndroidMessage("status", "finished"))
                 self.rpi_action_queue.put(PiAction(cat="stitch", value=""))
             else:
                 raise Exception(f"Unknown command: {command}")
@@ -373,7 +375,10 @@ class RaspberryPi:
         response = requests.post(url, files={"file": (filename, image_data)})
 
         if response.status_code != 200:
-            raise Exception("Something went wrong when requesting path from image-rec API.")
+            self.logger.error("Something went wrong when requesting path from image-rec API. Please try again.")
+            self.android_queue.put(AndroidMessage(
+                "error", "Something went wrong when requesting path from image-rec API. Please try again."))
+            return
 
         results = json.loads(response.content)
 
@@ -394,18 +399,19 @@ class RaspberryPi:
         # notify android of image-rec results
         self.android_queue.put(AndroidMessage("image-rec", results))
 
-    def request_algo(self, data: str):
+    def request_algo(self, data):
         """
         Requests for a series of commands and the path from the algo API
         The received commands and path are then queued in the respective queues
         If around=true, will call the /navigate endpoint instead, else /path is used
         """
-
+        print(data)
+        print(type(data))
         self.logger.info("Requesting path from algo...")
         self.android_queue.put(AndroidMessage("info", "Requesting path from algo..."))
 
         url = f"http://{API_IP}:{API_PORT}/path"
-        response = requests.post(url, json=data)
+        response = requests.post(url, json={**data, "mode": "0"})  # always request with mode=0 to algo for 3-1 turns
 
         # error encountered at the server, return early
         if response.status_code != 200:
@@ -415,16 +421,22 @@ class RaspberryPi:
             return
 
         # parse response
-        data = json.loads(response.content)['data']
+        result = json.loads(response.content)['data']
+        commands = result['commands']
+        path = result['path']
 
         # log commands received
-        self.logger.debug(f"Commands received from API: {data['commands']}")
+        self.logger.debug(f"Commands received from API: {commands}")
+
+        # replace commands from algo with outdoor commands
+        if data['mode'] == '1':  # outdoor mode (from android)
+            commands = list(map(self.outdoorsify, commands))
 
         # put commands and paths into queues
         self.clear_queues()
-        for c in data['commands']:
+        for c in commands:
             self.command_queue.put(c)
-        for p in data['path'][1:]:  # ignore first element as it is the starting position of the robot
+        for p in path[1:]:  # ignore first element as it is the starting position of the robot
             self.path_queue.put(p)
 
         # notify android
@@ -522,6 +534,15 @@ class RaspberryPi:
         except requests.Timeout:
             self.logger.warning("API Timeout")
             return False
+
+    @staticmethod
+    def outdoorsify(self, original):
+        if original.startswith(("FL", "FR", "BL", "BR")):
+            return original[:2] + "20"
+        elif original.startswith("FW"):
+            return original.replace("FW", "FS")
+        elif original.startswith("BW"):
+            return original.replace("BW", "BS")
 
 
 if __name__ == "__main__":
