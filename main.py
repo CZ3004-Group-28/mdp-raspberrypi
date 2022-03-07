@@ -12,6 +12,7 @@ import requests
 
 from communication.android import AndroidLink, AndroidMessage
 from communication.stm32 import STMLink
+from consts import SYMBOL_MAP
 from logger import prepare_logger
 from settings import API_IP, API_PORT, OUTDOOR_BIG_TURN
 
@@ -397,7 +398,7 @@ class RaspberryPi:
             self.logger.info("Found non-bullseye face, remaining commands and path cleared.")
             self.android_queue.put(AndroidMessage("info", "Found non-bullseye face, remaining commands cleared."))
 
-        self.logger.info(f"Image recognition results: {results}")
+        self.logger.info(f"Image recognition results: {results} ({SYMBOL_MAP.get(results['image_id'])})")
 
         # notify android of image-rec results
         self.android_queue.put(AndroidMessage("image-rec", results))
