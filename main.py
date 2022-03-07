@@ -405,8 +405,6 @@ class RaspberryPi:
         The received commands and path are then queued in the respective queues
         If around=true, will call the /navigate endpoint instead, else /path is used
         """
-        print(data)
-        print(type(data))
         self.logger.info("Requesting path from algo...")
         self.android_queue.put(AndroidMessage("info", "Requesting path from algo..."))
 
@@ -536,13 +534,15 @@ class RaspberryPi:
             return False
 
     @staticmethod
-    def outdoorsify(self, original):
+    def outdoorsify(original):
         if original.startswith(("FL", "FR", "BL", "BR")):
             return original[:2] + "20"
         elif original.startswith("FW"):
             return original.replace("FW", "FS")
         elif original.startswith("BW"):
             return original.replace("BW", "BS")
+        else:
+            return original
 
 
 if __name__ == "__main__":
