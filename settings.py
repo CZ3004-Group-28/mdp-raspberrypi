@@ -8,3 +8,6 @@ BAUD_RATE = 115200
 # API DETAILS
 API_IP = '192.168.28.15'  # tran's laptop hosting the api
 API_PORT = 5000
+
+# ROBOT SETTINGS
+OUTDOOR_BIG_TURN = False

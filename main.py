@@ -13,7 +13,7 @@ import requests
 from communication.android import AndroidLink, AndroidMessage
 from communication.stm32 import STMLink
 from logger import prepare_logger
-from settings import API_IP, API_PORT
+from settings import API_IP, API_PORT, OUTDOOR_BIG_TURN
 
 
 class PiAction:
@@ -222,9 +222,11 @@ class RaspberryPi:
                             self.android_queue.put(AndroidMessage('status', 'running'))
                         else:
                             self.logger.warning("The command queue is empty, please set obstacles.")
-                            self.android_queue.put(AndroidMessage("error", "Command queue is empty, did you set obstacles?"))
+                            self.android_queue.put(
+                                AndroidMessage("error", "Command queue is empty, did you set obstacles?"))
                     else:
-                        self.android_queue.put(AndroidMessage("error", "Robot must be in Path mode to start robot on path."))
+                        self.android_queue.put(
+                            AndroidMessage("error", "Robot must be in Path mode to start robot on path."))
                         self.logger.warning("Robot must be in Path mode to start robot on path.")
 
             # navigate around obstacle
@@ -233,7 +235,8 @@ class RaspberryPi:
                     self.rpi_action_queue.put(PiAction(**message))
                     self.logger.debug(f"Single-obstacle PiAction added to queue: {message}")
                 else:
-                    self.android_queue.put(AndroidMessage("error", "Robot must be in Path mode to set single obstacle."))
+                    self.android_queue.put(
+                        AndroidMessage("error", "Robot must be in Path mode to set single obstacle."))
                     self.logger.warning("Robot must be in Path mode to set single obstacle.")
 
     def recv_stm(self) -> None:
@@ -408,8 +411,14 @@ class RaspberryPi:
         self.logger.info("Requesting path from algo...")
         self.android_queue.put(AndroidMessage("info", "Requesting path from algo..."))
 
+        # only if outdoor mode, check if big turn is configured
+        if data['mode'] == "1" and OUTDOOR_BIG_TURN:
+            body = {**data, "mode": "1"}
+        else:
+            body = {**data, "mode": "0"}
+
         url = f"http://{API_IP}:{API_PORT}/path"
-        response = requests.post(url, json={**data, "mode": "0"})  # always request with mode=0 to algo for 3-1 turns
+        response = requests.post(url, json=body)
 
         # error encountered at the server, return early
         if response.status_code != 200:
@@ -429,6 +438,7 @@ class RaspberryPi:
         # replace commands from algo with outdoor commands
         if data['mode'] == '1':  # outdoor mode (from android)
             commands = list(map(self.outdoorsify, commands))
+            self.logger.debug(f"Outdoorsified commands: {commands}")
 
         # put commands and paths into queues
         self.clear_queues()
@@ -532,10 +542,15 @@ class RaspberryPi:
         except requests.Timeout:
             self.logger.warning("API Timeout")
             return False
+        except Exception as e:
+            self.logger.warning(f"API Exception: {e}")
+            return False
 
     @staticmethod
     def outdoorsify(original):
-        if original.startswith(("FL", "FR", "BL", "BR")):
+        # for turns, only replace regular 3-1 turns (TL00), with outdoor-calibrated 3-1 turns (TL20)
+        # large turns (TL30) do not need to be changed, as they are already calibrated for outdoors
+        if original in ["FL00", "FR00", "BL00", "BR00"]:
             return original[:2] + "20"
         elif original.startswith("FW"):
             return original.replace("FW", "FS")
