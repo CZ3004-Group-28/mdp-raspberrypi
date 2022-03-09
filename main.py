@@ -414,9 +414,9 @@ class RaspberryPi:
 
         # only if outdoor mode, check if big turn is configured
         if data['mode'] == "1" and OUTDOOR_BIG_TURN:
-            body = {**data, "mode": "1"}
+            body = {**data, "big_turn": "1"}
         else:
-            body = {**data, "mode": "0"}
+            body = {**data, "big_turn": "0"}
 
         url = f"http://{API_IP}:{API_PORT}/path"
         response = requests.post(url, json=body)
