@@ -263,6 +263,11 @@ class RaspberryPi:
                             "d": temp['d'],
                         }
                         self.android_queue.put(AndroidMessage('location', location))
+                    else:
+                        if message == "ACK|X":
+                            self.logger.debug("Fastest car ACK received from STM32!")
+                            self.android_queue.put(AndroidMessage("info", "Robot has completed fastest car!"))
+                            self.android_queue.put(AndroidMessage("status", "finished"))
                 except Exception:
                     self.logger.warning("Tried to release a released lock!")
             else:
@@ -301,6 +306,11 @@ class RaspberryPi:
             stm32_prefixes = ("FS", "BS", "FW", "BW", "FL", "FR", "BL", "BR", "TL", "TR", "A", "C", "DT", "STOP", "ZZ")
             if command.startswith(stm32_prefixes):
                 self.stm_link.send(command)
+
+            if command.startswith("WN"):
+                self.stm_link.send(command)
+                self.android_queue.put(AndroidMessage('status', 'running'))
+                self.android_queue.put(AndroidMessage("info", "Starting robot on fastest car!"))
 
             # snap command (path mode)
             elif command.startswith("SNAP"):

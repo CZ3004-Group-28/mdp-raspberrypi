@@ -96,6 +96,12 @@ Pi will immediately capture an image using the camera and make a call to the Ima
 {"cat": "manual", "value": "MANSNAP"}
 ```
 
+##### Start Robot on the Fastest Car Challenge
+```json
+{"cat": "manual", "value": "WN01"}
+{"cat": "manual", "value": "WN02"}
+```
+
 ---
 
 ### RPi to Android
