@@ -307,7 +307,7 @@ class RaspberryPi:
             if command.startswith(stm32_prefixes):
                 self.stm_link.send(command)
 
-            if command.startswith("WN"):
+            elif command.startswith("WN"):
                 self.stm_link.send(command)
                 self.android_queue.put(AndroidMessage('status', 'running'))
                 self.android_queue.put(AndroidMessage("info", "Starting robot on fastest car!"))
